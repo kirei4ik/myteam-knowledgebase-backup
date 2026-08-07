@@ -66,3 +66,31 @@ def test_config_requires_github_creds(monkeypatch):
 def test_config_no_github_required_when_local(monkeypatch):
     cfg = _cfg(monkeypatch, STORAGE_BACKEND="local")
     assert cfg.storage_backend == "local"
+
+
+def test_snapshot_min_interval_parses_hours_and_minutes(monkeypatch):
+    cfg = _cfg(monkeypatch,
+               SNAPSHOT_MIN_INTERVAL_HOURS="2",
+               SNAPSHOT_MIN_INTERVAL_MINUTES="30")
+    assert cfg.snapshot_min_interval == 150.0
+
+
+def test_snapshot_min_interval_only_minutes(monkeypatch):
+    monkeypatch.setenv("SNAPSHOT_MIN_INTERVAL_HOURS", "")
+    cfg = _cfg(monkeypatch, SNAPSHOT_MIN_INTERVAL_MINUTES="45")
+    assert cfg.snapshot_min_interval == 45.0
+
+
+def test_snapshot_retention_count_parsed(monkeypatch):
+    cfg = _cfg(monkeypatch, SNAPSHOT_RETENTION_COUNT="7")
+    assert cfg.snapshot_retention_count == 7
+
+
+def test_snapshot_options_propagate_to_local(monkeypatch):
+    cfg = _cfg(monkeypatch,
+               SNAPSHOT_RETENTION_COUNT="5",
+               SNAPSHOT_MIN_INTERVAL_HOURS="1")
+    s = build_storage(cfg)
+    assert isinstance(s, LocalStorageBackend)
+    assert s.retention_count == 5
+    assert s.min_interval_minutes == 60.0

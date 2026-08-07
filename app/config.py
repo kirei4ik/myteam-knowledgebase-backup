@@ -48,6 +48,8 @@ class Config:
     create_snapshot: bool = True
     snapshot_format: str = "zip"
     snapshot_retention_days: int | None = None
+    snapshot_retention_count: int | None = None
+    snapshot_min_interval: float = 0  # в минутах
     fail_on_asset_error: bool = True
     redact_secrets: bool = True
 
@@ -121,6 +123,8 @@ def build_config(dry_run: bool = False, output_dir: str | None = None) -> Config
         create_snapshot=_as_bool(_env("CREATE_SNAPSHOT", "true"), True),
         snapshot_format=_env("SNAPSHOT_FORMAT", "zip"),
         snapshot_retention_days=_int_or_none(_env("SNAPSHOT_RETENTION_DAYS", "")),
+        snapshot_retention_count=_int_or_none(_env("SNAPSHOT_RETENTION_COUNT", "")),
+        snapshot_min_interval=_snapshot_min_interval_minutes(),
         fail_on_asset_error=_as_bool(_env("FAIL_ON_ASSET_ERROR", "true"), True),
         redact_secrets=_as_bool(_env("REDACT", "true"), True),
         github_token=_env("GITHUB_TOKEN"),
@@ -156,6 +160,26 @@ def _int_or_none(value: str) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _float_or_zero(value: str) -> float:
+    if value == "":
+        return 0.0
+    try:
+        return float(value)
+    except ValueError:
+        return 0.0
+
+
+def _snapshot_min_interval_minutes() -> float:
+    """Минимальный интервал между снапшотами (в минутах).
+
+    Принимает SNAPSHOT_MIN_INTERVAL_HOURS и/или SNAPSHOT_MIN_INTERVAL_MINUTES,
+    суммирует их. Приоритет — часы, если заданы оба.
+    """
+    hours = _float_or_zero(_env("SNAPSHOT_MIN_INTERVAL_HOURS", ""))
+    minutes = _float_or_zero(_env("SNAPSHOT_MIN_INTERVAL_MINUTES", ""))
+    return round(hours * 60 + minutes, 6)
 
 
 class ConfigError(Exception):

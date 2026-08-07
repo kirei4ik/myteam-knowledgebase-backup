@@ -16,6 +16,8 @@ def build_storage(config: Config) -> StorageBackend:
             backups_dir=config.local_backup_dir,
             snapshot=config.snapshot_enabled,
             retention_days=config.snapshot_retention_days,
+            retention_count=config.snapshot_retention_count,
+            min_interval_minutes=config.snapshot_min_interval,
         )
     if config.storage_backend == "github":
         return GithubStorageBackend(
@@ -37,5 +39,7 @@ def build_storage(config: Config) -> StorageBackend:
             verify_ssl=config.s3_verify_ssl,
             snapshot=config.snapshot_enabled,
             retention_days=config.snapshot_retention_days,
+            retention_count=config.snapshot_retention_count,
+            min_interval_minutes=config.snapshot_min_interval,
         )
     raise ValueError(f"Unknown storage backend: {config.storage_backend}")

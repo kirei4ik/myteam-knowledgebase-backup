@@ -156,10 +156,17 @@ myteam-kb/
 ```env
 CREATE_SNAPSHOT=true
 SNAPSHOT_FORMAT=zip
-SNAPSHOT_RETENTION_DAYS=30
+SNAPSHOT_RETENTION_DAYS=30     # хранить не старше N дней
+SNAPSHOT_RETENTION_COUNT=7     # держать максимум N последних снапшотов
+SNAPSHOT_MIN_INTERVAL_HOURS=24 # не создавать снапшот чаще, чем раз в N часов
+SNAPSHOT_MIN_INTERVAL_MINUTES=0 # ... или дополнительно N минут
 ```
 
-Снапшоты старше `SNAPSHOT_RETENTION_DAYS` удаляются. Для GitHub отдельный ZIP не создаётся — историю хранит сам Git.
+- **Интервал** (`SNAPSHOT_MIN_INTERVAL_HOURS` / `SNAPSHOT_MIN_INTERVAL_MINUTES`, значения суммируются): снапшот не создаётся, если последний сделан менее этого периода назад — обновляется только `latest`. `0` — создавать при каждом запуске.
+- **Ретеншн по дням** (`SNAPSHOT_RETENTION_DAYS`) — удаляются снапшоты старше N дней.
+- **Ретеншн по количеству** (`SNAPSHOT_RETENTION_COUNT`) — остаются всегда последние N архива, старее удаляются. `0` — не держать архивов.
+
+Оба ограничения применяются вместе: снапшот удаляется, если он старше `SNAPSHOT_RETENTION_DAYS` **или** находится за пределами последних `SNAPSHOT_RETENTION_COUNT`. Для GitHub отдельный ZIP не создаётся — историю хранит сам Git.
 
 ## Обработка ошибок
 
