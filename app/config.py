@@ -52,6 +52,9 @@ class Config:
     snapshot_min_interval: float = 0  # в минутах
     fail_on_asset_error: bool = True
     redact_secrets: bool = True
+    backup_concurrency: int = 8
+    retry_count: int = 3
+    retry_backoff: float = 0.5
 
     github_token: str = ""
     github_repository: str = ""
@@ -127,6 +130,9 @@ def build_config(dry_run: bool = False, output_dir: str | None = None) -> Config
         snapshot_min_interval=_snapshot_min_interval_minutes(),
         fail_on_asset_error=_as_bool(_env("FAIL_ON_ASSET_ERROR", "true"), True),
         redact_secrets=_as_bool(_env("REDACT", "true"), True),
+        backup_concurrency=max(1, _int_or_value(_env("BACKUP_CONCURRENCY", "8"), 8)),
+        retry_count=max(0, _int_or_value(_env("RETRY_COUNT", "3"), 3)),
+        retry_backoff=max(0.0, _float_or_value(_env("RETRY_BACKOFF", "0.5"), 0.5)),
         github_token=_env("GITHUB_TOKEN"),
         github_repository=_env("GITHUB_REPOSITORY"),
         github_branch=_env("GITHUB_BRANCH", "main"),
@@ -160,6 +166,20 @@ def _int_or_none(value: str) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _int_or_value(value: str, default: int) -> int:
+    parsed = _int_or_none(value)
+    return default if parsed is None else parsed
+
+
+def _float_or_value(value: str, default: float) -> float:
+    if value == "":
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
 
 
 def _float_or_zero(value: str) -> float:

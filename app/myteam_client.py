@@ -5,11 +5,39 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .config import Config
 from .logging import logger
 
 DEFAULT_TIMEOUT = 60
+
+_RETRIABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def build_session(retry_count: int = 3, retry_backoff: float = 0.5) -> requests.Session:
+    """HTTP-сессия с ретраями на сбои соединения и 5xx.
+
+    retry_count=0 отключает ретраи. retry_backoff — начальная задержка
+    (экспоненциально умножается на 2 с каждой попыткой).
+    """
+    retries = Retry(
+        total=retry_count,
+        connect=retry_count,
+        read=retry_count,
+        status=retry_count,
+        other=retry_count,
+        backoff_factor=retry_backoff,
+        status_forcelist=list(_RETRIABLE_STATUS),
+        raise_on_status=False,
+        allowed_methods=frozenset(["GET", "POST", "DELETE", "PUT", "HEAD", "OPTIONS"]),
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
 class MyTeamError(Exception):
@@ -29,11 +57,17 @@ class ApiError(MyTeamError):
 
 
 class MyTeamClient:
-    def __init__(self, config: Config, session: requests.Session | None = None):
+    def __init__(self, config: Config, session: requests.Session | None = None,
+                 token: str | None = None):
         self.config = config
         self.base_url = config.myteam_base_url
-        self.session = session or requests.Session()
-        self._token: str | None = None
+        self.session = session or build_session(
+            config.retry_count, config.retry_backoff)
+        self._token = token
+
+    def clone(self) -> "MyTeamClient":
+        """Отдельная сессия (для параллельных воркеров) с тем же токеном."""
+        return MyTeamClient(self.config, session=None, token=self._token)
 
     # -- auth -----------------------------------------------------------------
     def _headers(self, json: bool = True) -> dict[str, str]:

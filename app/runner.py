@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -38,9 +40,6 @@ def build_backup(config: Config) -> Manifest:
 
     client = MyTeamClient(config)
     client.authenticate()
-    exporter = Exporter(client, config.myteam_base_url,
-                        config.fail_on_asset_error,
-                        redact=config.redact_secrets)
 
     groups = client.get_groups()
     logger.info(f"Categories loaded: {len(groups)}")
@@ -73,30 +72,98 @@ def build_backup(config: Config) -> Manifest:
     manifest.articles = len(all_articles)
     logger.info(f"Articles discovered: {len(all_articles)}")
 
-    for i, art in enumerate(all_articles, start=1):
+    concurrency = max(1, config.backup_concurrency or 1)
+
+    # requests.Session не потокобезопасен: каждый воркер получает свою
+    # сессию с тем же токеном (client.clone) и лениво создаёт Exporter.
+    worker_state = threading.local()
+
+    def _worker_exporter() -> Exporter:
+        exporter = getattr(worker_state, "exporter", None)
+        if exporter is None:
+            exporter = Exporter(
+                client.clone(),
+                config.myteam_base_url,
+                config.fail_on_asset_error,
+                redact=config.redact_secrets)
+            worker_state.exporter = exporter
+        return exporter
+
+    def process_one(art: dict) -> dict:
+        """Обрабатывает одну статью. Возвращает dict с результатом."""
         aid = art.get("id")
         title = art.get("name", str(aid))
-        logger.info(f"Processing article {i}/{len(all_articles)}: {title}")
         try:
-            item = client.get_article(aid)
+            exporter = _worker_exporter()
+            item = exporter.client.get_article(aid)
             gid = (item.get("group") or {}).get("id")
             category_name = group_names.get(gid, "")
             art_dir = category_dirs.get(gid, kb_root) / sanitize_component(title)
             stat = exporter.export_article(art_dir, item, category_name)
-            manifest.images += stat["images"]
-            manifest.attachments += stat["attachments"]
-            for rel, digest in stat["files"].items():
-                manifest.files[f"{aid}/{rel}"] = digest
-            manifest.errors.extend(f"[{title}] {e}" for e in stat["errors"])
+            return {"ok": True, "stat": stat, "title": title, "aid": aid}
         except AssetError as exc:
             logger.error(f"Article {aid} asset failed: {exc}")
-            raise BackupError(f"Article {aid} asset failed: {exc}") from exc
+            return {"ok": False, "fatal": True, "message": f"Article {aid} "
+                    f"asset failed: {exc}", "title": title, "aid": aid}
+        except MyTeamError as exc:
+            logger.error(f"Article {aid} failed: {exc}")
+            return {"ok": False, "fatal": False,
+                    "message": f"[{title}] {exc}", "title": title, "aid": aid}
         except Exception as exc:  # noqa: BLE001
             logger.error(f"Article {aid} failed: {exc}")
-            manifest.errors.append(f"[{title}] {exc}")
+            return {"ok": False, "fatal": False,
+                    "message": f"[{title}] {exc}", "title": title, "aid": aid}
+
+    if concurrency > 1:
+        _process_parallel(process_one, all_articles, concurrency, manifest)
+    else:
+        _process_sequential(process_one, all_articles, manifest)
 
     manifest.write(work_root)
     return manifest
+
+
+def _process_sequential(process_one, all_articles, manifest) -> None:
+    total = len(all_articles)
+    for i, art in enumerate(all_articles, start=1):
+        logger.info(f"Processing article {i}/{total}: {art.get('name', art.get('id'))}")
+        _collect(manifest, process_one(art), f"{i}/{total}")
+
+
+def _process_parallel(process_one, all_articles, concurrency, manifest) -> None:
+    total = len(all_articles)
+    done = 0
+    with ThreadPoolExecutor(max_workers=concurrency,
+                            thread_name_prefix="kb-worker") as pool:
+        futs = {pool.submit(process_one, art): art for art in all_articles}
+        for future in as_completed(futs):
+            done += 1
+            art = futs[future]
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"Worker failed for {art.get('id')}: {exc}")
+                result = {"ok": False, "fatal": False,
+                          "message": f"[{art.get('name', art.get('id'))}] {exc}"}
+            idx = f"{done}/{total}"
+            logger.info(f"Processing article {idx}: {result['title']}")
+            _collect(manifest, result, idx)
+            if done % 10 == 0 or done == total:
+                logger.info(f"Progress: {done}/{total} articles")
+
+
+def _collect(manifest, result, label) -> None:
+    if not result["ok"]:
+        if result.get("fatal"):
+            raise BackupError(result["message"]) from None
+        manifest.errors.append(result["message"])
+        return
+    stat = result["stat"]
+    manifest.images += stat["images"]
+    manifest.attachments += stat["attachments"]
+    for rel, digest in stat["files"].items():
+        manifest.files[f"{result['aid']}/{rel}"] = digest
+    manifest.errors.extend(f"[{result['title']}] {e}" for e in stat["errors"])
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -94,3 +94,24 @@ def test_snapshot_options_propagate_to_local(monkeypatch):
     assert isinstance(s, LocalStorageBackend)
     assert s.retention_count == 5
     assert s.min_interval_minutes == 60.0
+
+
+def test_backup_concurrency_default(monkeypatch):
+    cfg = _cfg(monkeypatch)
+    assert cfg.backup_concurrency == 8
+
+
+def test_backup_concurrency_parsed(monkeypatch):
+    cfg = _cfg(monkeypatch, BACKUP_CONCURRENCY="4")
+    assert cfg.backup_concurrency == 4
+
+
+def test_backup_concurrency_min_one(monkeypatch):
+    cfg = _cfg(monkeypatch, BACKUP_CONCURRENCY="0")
+    assert cfg.backup_concurrency >= 1
+
+
+def test_retry_config_parsed(monkeypatch):
+    cfg = _cfg(monkeypatch, RETRY_COUNT="5", RETRY_BACKOFF="1.5")
+    assert cfg.retry_count == 5
+    assert cfg.retry_backoff == 1.5
