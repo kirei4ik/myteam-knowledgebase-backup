@@ -12,8 +12,9 @@ class StorageBackend(abc.ABC):
     def store(self, backup_root: Path, timestamp: str, manifest) -> None:
         """Передаёт полностью сформированный backup на хранение.
 
-        backup_root содержит подкаталог `knowledge-base/` и `manifest.json`.
-        Операция должна быть атомарной на уровне публикации `latest`.
+        backup_root содержит подкаталог `knowledge-base/`, `manifest.json`
+        и `report.md`. Операция должна быть атомарной на уровне публикации
+        `latest`.
         """
         raise NotImplementedError
 

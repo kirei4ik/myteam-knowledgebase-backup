@@ -50,6 +50,8 @@ class S3StorageBackend(StorageBackend):
                 self._client.upload_file(str(p), self.bucket, key)
         mf_key = f"{self.prefix}/latest/manifest.json"
         self._client.upload_file(str(backup_root / "manifest.json"), self.bucket, mf_key)
+        rp_key = f"{self.prefix}/latest/report.md"
+        self._client.upload_file(str(backup_root / "report.md"), self.bucket, rp_key)
         logger.info("latest uploaded")
 
         if self.snapshot:
@@ -101,6 +103,10 @@ class S3StorageBackend(StorageBackend):
             for f in kb.rglob("*"):
                 if f.is_file():
                     zf.write(f, _rel(f, kb))
+            for name in ("manifest.json", "report.md"):
+                src = kb.parent / name
+                if src.is_file():
+                    zf.write(src, name)
         return buf.getvalue()
 
     def _list_snapshots(self) -> list[tuple[datetime, str]]:

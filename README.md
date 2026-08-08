@@ -65,11 +65,15 @@ project/
 ├── backup.py
 └── backups/
     ├── latest/
+    │   ├── report.md
+    │   ├── manifest.json
     │   └── knowledge-base/
     └── snapshots/
         └── <timestamp>/
             └── knowledge-base.zip
 ```
+
+`latest/` — актуальный бэкап. `report.md` — человекочитаемый отчёт о прогоне (статус, время, счётчики, список ошибок); он же и `manifest.json` вкладываются в снапшот-архив.
 
 ### Dry-run
 
@@ -98,8 +102,10 @@ docker run --rm \
   --env-file .env \
   -v "$(pwd)/backups:/data/backups" \
   -e LOCAL_BACKUP_DIR=/data/backups \
-  myteam-kb-backup
+  myteam-kb-backup python backup.py
 ```
+
+Контейнер по умолчанию «спит» (`sleep infinity`); бэкап запускается явным вызовом `python backup.py` (аргументы переопределяют CMD).
 
 В `docker-compose`/Coolify обязательно подключается persistent volume `/data/backups`.
 
@@ -238,6 +244,7 @@ myteam-kb-backup/
 │   ├── html_converter.py
 │   ├── downloader.py
 │   ├── manifest.py
+│   ├── report.py
 │   ├── runner.py
 │   └── storage/
 │       ├── base.py

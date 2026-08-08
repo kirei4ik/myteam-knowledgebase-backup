@@ -15,6 +15,7 @@ from .exporter import Exporter
 from .logging import logger
 from .manifest import Manifest
 from .myteam_client import MyTeamClient, MyTeamError
+from .report import build_report
 from .storage.factory import build_storage
 
 BACKUP_SUBDIR = "knowledge-base"
@@ -30,6 +31,7 @@ def _now_timestamp() -> str:
 
 def build_backup(config: Config) -> Manifest:
     """Строит полный backup в WORK_DIR. Бросает BackupError при критичных ошибках."""
+    started_at = datetime.now()
     work_root = Path(config.work_dir)
     work_root.mkdir(parents=True, exist_ok=True)
     for child in work_root.iterdir():
@@ -119,6 +121,7 @@ def build_backup(config: Config) -> Manifest:
     else:
         _process_sequential(process_one, all_articles, manifest)
 
+    build_report(work_root, manifest, started_at)
     manifest.write(work_root)
     return manifest
 

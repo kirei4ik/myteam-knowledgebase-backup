@@ -38,6 +38,7 @@ class GithubStorageBackend(StorageBackend):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(btr, target)
         shutil.copy2(backup_root / "manifest.json", target.parent / "manifest.json")
+        shutil.copy2(backup_root / "report.md", target.parent / "report.md")
 
         self._commit_and_push(clone_dir, timestamp)
 

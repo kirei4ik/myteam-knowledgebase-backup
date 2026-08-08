@@ -81,6 +81,10 @@ class LocalStorageBackend(StorageBackend):
                 for p in kb.rglob("*"):
                     if p.is_file():
                         zf.write(p, p.relative_to(kb))
+            for name in ("manifest.json", "report.md"):
+                src = latest_dir / name
+                if src.is_file():
+                    zf.write(src, name)
         logger.info("Snapshot created")
 
     def _cleanup(self) -> None:
