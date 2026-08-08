@@ -198,12 +198,14 @@ REDACT=true
 
 ## Coolify
 
-1. Создайте Application из Git-репозитория (Dockerfile).
+1. Создайте Application из Git-репозитория (Dockerfile). Контейнер по умолчанию «спит» (`sleep infinity`) — всю работу выполняет Scheduled Task.
 2. В Environment Variables укажите переменные из `.env.example`.
 3. При `STORAGE_BACKEND=local` создайте persistent volume `/data/backups` и задайте `LOCAL_BACKUP_DIR=/data/backups`.
-4. Создайте Scheduled Task с командой `python backup.py`.
+4. Создайте Scheduled Task с командой `python backup.py`. Логи прогона смотрите в Logs задачи (весь INFO/ERROR вывод).
 
 Рекомендуемое расписание: `30 2 * * *` (раз в сутки). Расписание задаётся в Coolify, не в коде.
+
+Образ универсален: для одноразового прогона локально выполните `docker run --rm <image> python backup.py` (аргументы переопределяют CMD).
 
 ## Environment variables
 
