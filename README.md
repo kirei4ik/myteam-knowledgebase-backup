@@ -7,12 +7,11 @@ Backup — это человекочитаемая структура катал
 ```
 knowledge-base/
 └── ИТ - инструменты/
-    └── Обходы блокировок/
-        └── Настроить Proxy для Telegram/
-            ├── Настроить Proxy для Telegram.md
-            ├── image-1.png
-            ├── .source.html
-            └── .metadata.json
+    └── Настройка подключения/
+        ├── Настройка подключения.md
+        ├── image-1.png
+        ├── .source.html
+        └── .metadata.json
 ```
 
 ## Логическая модель
@@ -25,34 +24,35 @@ knowledge-base/
 
 ## Возможности
 
-- авторизация через `POST /api/login` (Bearer-токен получается при каждом запуске, на диск не пишется);
+- авторизация через `POST /api/login-mobile` (fallback на `/api/login`), Bearer-токен получается при каждом запуске и на диск не пишется;
 - полный список категорий и статей с учётом пагинации;
 - HTML → Markdown (`markdownify` + `BeautifulSoup`);
 - скачивание картинок/видео/вложений с заменой ссылок на локальные;
 - сохранение `.source.html` и `.metadata.json`;
 - `manifest.json` со счётчиками и SHA-256 файлов;
 - storage backends: `local`, `github`, `s3`;
-- snapshots (`latest/` + `snapshots/<timestamp>/knowledge-base.zip`);
-- retention старых снапшотов;
+- snapshots (`latest/` + `snapshots/<timestamp>/knowledge-base.zip`) с retention и минимальным интервалом;
+- параллельная обработка статей и ретраи сетевых запросов;
+- маскирование логинов/паролей и email в выгружаемых файлах (`REDACT`);
 - `--dry-run` и `--output`.
 
-## Локальный запуск
+## Quick Start
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # заполните MYTEAM_EMAIL / MYTEAM_PASSWORD
 ```
 
 В `.env`:
 
 ```env
-MYTEAM_BASE_URL=https://profitreid.ismyteam.ru
+MYTEAM_BASE_URL=https://your-team.ismyteam.ru
 MYTEAM_EMAIL=you@company.ru
 MYTEAM_PASSWORD=secret
 STORAGE_BACKEND=local
 LOCAL_BACKUP_DIR=./backups
 ```
 
-Затем:
+Запуск:
 
 ```bash
 python backup.py
@@ -64,21 +64,11 @@ python backup.py
 project/
 ├── backup.py
 └── backups/
-    └── latest/
-        └── knowledge-base/
-```
-
-Вывод в консоль:
-
-```text
-[INFO] Authentication successful
-[INFO] Categories loaded: 13
-[INFO] Articles discovered: 22
-[INFO] Processing article 1/22: ...
-[INFO] Downloading image: ...
-[INFO] Markdown generated
-[INFO] Snapshot created
-[INFO] Backup completed successfully
+    ├── latest/
+    │   └── knowledge-base/
+    └── snapshots/
+        └── <timestamp>/
+            └── knowledge-base.zip
 ```
 
 ### Dry-run
@@ -87,7 +77,7 @@ project/
 python backup.py --dry-run
 ```
 
-Строит полный backup в `WORK_DIR`, ничего не публикует.
+Строит полный backup в `WORK_DIR`, ничего не публикует. Удобно для проверки до первого реального прогона.
 
 ### Локальная разработка
 
@@ -156,9 +146,9 @@ myteam-kb/
 ```env
 CREATE_SNAPSHOT=true
 SNAPSHOT_FORMAT=zip
-SNAPSHOT_RETENTION_DAYS=30     # хранить не старше N дней
-SNAPSHOT_RETENTION_COUNT=7     # держать максимум N последних снапшотов
-SNAPSHOT_MIN_INTERVAL_HOURS=24 # не создавать снапшот чаще, чем раз в N часов
+SNAPSHOT_RETENTION_DAYS=30      # хранить не старше N дней
+SNAPSHOT_RETENTION_COUNT=7      # держать максимум N последних снапшотов
+SNAPSHOT_MIN_INTERVAL_HOURS=24  # не создавать снапшот чаще, чем раз в N часов
 SNAPSHOT_MIN_INTERVAL_MINUTES=0 # ... или дополнительно N минут
 ```
 
@@ -167,6 +157,18 @@ SNAPSHOT_MIN_INTERVAL_MINUTES=0 # ... или дополнительно N мин
 - **Ретеншн по количеству** (`SNAPSHOT_RETENTION_COUNT`) — остаются всегда последние N архива, старее удаляются. `0` — не держать архивов.
 
 Оба ограничения применяются вместе: снапшот удаляется, если он старше `SNAPSHOT_RETENTION_DAYS` **или** находится за пределами последних `SNAPSHOT_RETENTION_COUNT`. Для GitHub отдельный ZIP не создаётся — историю хранит сам Git.
+
+## Масштабирование
+
+```env
+BACKUP_CONCURRENCY=8    # сколько статей обрабатывается параллельно
+RETRY_COUNT=3           # ретраи сетевых запросов, 0 — выключить
+RETRY_BACKOFF=0.5       # начальная задержка перед повтором (экспонента, сек)
+```
+
+- Статьи обрабатываются **параллельно** в пул воркеров (`BACKUP_CONCURRENCY`). Каждый воркер имеет собственную HTTP-сессию с тем же токеном — `requests.Session` не потокобезопасен, поэтому сессии изолированы.
+- Сетевые запросы (включая скачивание файлов) **повторяются** на сбои соединения и 5xx — `ChunkedEncodingError`, таймауты, 429/500/502/503/504.
+- Ошибка одной статьи записывается в `manifest.errors` и не останавливает остальные. При **исключениях ассетов** и `FAIL_ON_ASSET_ERROR=true` бэкап падает целиком — на большом объёме рекомендуется `FAIL_ON_ASSET_ERROR=false`, чтобы не валился весь прогон из-за одного битого файла.
 
 ## Обработка ошибок
 
@@ -184,20 +186,15 @@ Exit codes: `0` — успех, `1` — ошибка.
 REDACT=true
 ```
 
-Статьи базы знаний могут содержать логины/пароли и email («Корп. почта и пароль…», «Прокси для Telegram» и т.п.). При `REDACT=true` (по умолчанию) такие значения заменяются на `REDACTED` / `********` во всех выгружаемых файлах — `.md`, `.source.html`, `.metadata.json`. Это важно при публикации бэкапа в публичный git/S3. Отключить — `REDACT=false`.
+Статьи базы знаний могут содержать логины/пароли и email. При `REDACT=true` (по умолчанию) такие значения заменяются на `REDACTED` / `********` во всех выгружаемых файлах — `.md`, `.source.html`, `.metadata.json`. Это важно при публикации бэкапа в публичный git/S3. Отключить — `REDACT=false`.
 
-## Масштабирование
+## Безопасность
 
-```env
-BACKUP_CONCURRENCY=8   # сколько статей обрабатывается параллельно
-RETRY_COUNT=3          # ретраи сетевых запросов, 0 — выключить
-RETRY_BACKOFF=0.5       # начальная задержка перед повтором (экспонента, сек)
-```
-
-- Статьи обрабатываются **параллельно** в пул воркеров (`BACKUP_CONCURRENCY`). Каждый воркер имеет собственную HTTP-сессию с тем же токеном — `requests.Session` не потокобезопасен, поэтому сессии изолированы.
-- Сетевые запросы (включая скачивание файлов) **повторяются** на сбои соединения и 5xx — `ChunkedEncodingError`, таймауты, 429/500/502/503/504.
-- Ошибка одной статьи записывается в `manifest.errors` и не останавливает остальные. При **исключениях ассетов** и `FAIL_ON_ASSET_ERROR=true` бэкап падает целиком — на большом объёме рекомендуется `FAIL_ON_ASSET_ERROR=false`, чтобы не валился весь прогон из-за одного битого файла.
-- Ожидаемая цель: ~700 статей (~5000 файлов) завершаются за минуты, а не часы.
+- Креды читаются только из environment variables, **не хранятся** в репозитории и на диске.
+- Bearer-токен получается при каждом запуске и не записывается в файлы.
+- Пароли и токены не выводятся в лог.
+- `REDACT=true` маскирует логины/пароли/email в выгружаемом контенте.
+- Бэкап содержит полное содержимое базы знаний — не публикуйте его без проверки на чувствительные данные.
 
 ## Coolify
 
@@ -217,15 +214,13 @@ RETRY_BACKOFF=0.5       # начальная задержка перед пов�
 - `github` — + `GITHUB_TOKEN`, `GITHUB_REPOSITORY`;
 - `s3` — + `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
 
-Пароли и токены в лог не выводятся.
-
 ## Тесты
 
 ```bash
 python -m pytest tests/
 ```
 
-Покрытие: безопасные имена, HTML→Markdown, локальные ссылки `<img>`, дерево категорий, пагинация, выбор backend, валидация конфигурации.
+Покрытие: безопасные имена каталогов, HTML→Markdown, локальные ссылки, пагинация, выбор backend, валидация конфигурации, маскирование секретов, ретраи/сессии, параллельная обработка статей, политика снапшотов (интервал + retention).
 
 ## Структура проекта
 
@@ -236,6 +231,7 @@ myteam-kb-backup/
 │   ├── logging.py
 │   ├── common.py
 │   ├── myteam_client.py
+│   ├── redact.py
 │   ├── exporter.py
 │   ├── html_converter.py
 │   ├── downloader.py
@@ -251,5 +247,9 @@ myteam-kb-backup/
 ├── requirements.txt
 ├── Dockerfile
 ├── .env.example
-└── README.md
+└── LICENSE
 ```
+
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE).

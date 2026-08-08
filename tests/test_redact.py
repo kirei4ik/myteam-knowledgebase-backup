@@ -14,14 +14,14 @@ def test_redacts_inline_login_password_pair():
 
 
 def test_redacts_mailto_link():
-    out = redact_credentials("логин [tech@profitreid.com](mailto:tech@profitreid.com)")
-    assert "tech@profitreid.com" not in out
+    out = redact_credentials("логин [user@example.com](mailto:user@example.com)")
+    assert "user@example.com" not in out
     assert "REDACTED" in out
 
 
 def test_redacts_html_mailto():
-    out = redact_credentials('<a href="mailto:tech@profitreid.com">tech@profitreid.com</a>')
-    assert "tech@profitreid.com" not in out
+    out = redact_credentials('<a href="mailto:user@example.com">user@example.com</a>')
+    assert "user@example.com" not in out
     assert "********" in out
     assert "REDACTED" in out
 

@@ -115,7 +115,7 @@ def build_config(dry_run: bool = False, output_dir: str | None = None) -> Config
         )
 
     cfg = Config(
-        myteam_base_url=_env("MYTEAM_BASE_URL", "https://profitreid.ismyteam.ru").rstrip("/"),
+        myteam_base_url=_env("MYTEAM_BASE_URL", "https://your-team.ismyteam.ru").rstrip("/"),
         myteam_email=_env("MYTEAM_EMAIL"),
         myteam_password=_env("MYTEAM_PASSWORD"),
         storage_backend=backend,

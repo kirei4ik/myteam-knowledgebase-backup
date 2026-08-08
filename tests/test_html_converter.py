@@ -5,7 +5,7 @@ import pytest
 from app.exporter import normalize_date
 from app.html_converter import build_markdown, is_internal_url
 
-BASE = "https://profitreid.ismyteam.ru"
+BASE = "https://x.ru"
 
 
 def test_normalize_date():
@@ -15,7 +15,7 @@ def test_normalize_date():
 
 def test_is_internal_url():
     assert is_internal_url("/storage/public/a.png", BASE)
-    assert is_internal_url("https://profitreid.ismyteam.ru/x.png", BASE)
+    assert is_internal_url("https://x.ru/x.png", BASE)
     assert not is_internal_url("https://evil.com/x.png", BASE)
     assert not is_internal_url("data:image/png;base64,xxx", BASE)
 
