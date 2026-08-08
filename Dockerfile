@@ -14,4 +14,7 @@ COPY app/ app/
 
 ENV PYTHONUNBUFFERED=1
 
+# Ключ-точка для persistent volume бэкапов (STORAGE_BACKEND=local).
+VOLUME ["/data/backups"]
+
 CMD ["sh", "-c", "sleep infinity"]

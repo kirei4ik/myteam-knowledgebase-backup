@@ -18,6 +18,15 @@ def test_is_internal_url():
     assert is_internal_url("https://x.ru/x.png", BASE)
     assert not is_internal_url("https://evil.com/x.png", BASE)
     assert not is_internal_url("data:image/png;base64,xxx", BASE)
+    assert not is_internal_url("file:///Users/me/tmp/a.png", BASE)
+    assert not is_internal_url("ftp://x.ru/a.png", BASE)
+
+
+def test_file_scheme_image_skipped():
+    r = build_markdown(
+        '<p><img src="file:///Users/me/tmp/lu123_tmp.png"></p>', BASE)
+    assert r.resources == []
+    assert "lu123_tmp.png" in r.markdown or "tmp.png" in r.markdown
 
 
 def test_html_to_markdown_heading_paragraph():

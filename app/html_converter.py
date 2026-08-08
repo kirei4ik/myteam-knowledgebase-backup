@@ -28,9 +28,11 @@ def is_internal_url(url: str, base_url: str) -> bool:
     """True, если URL указывает на внутреннее хранилище «МояКоманда»."""
     if not url or url.startswith("data:"):
         return False
-    if not url.startswith(("http://", "https://")):
-        return True  # относительный путь — внутренний
-    return urlparse(url).netloc == urlparse(base_url).netloc
+    if url.startswith(("http://", "https://")):
+        return urlparse(url).netloc == urlparse(base_url).netloc
+    if "://" in url:
+        return False  # file://, ftp:// и прочие схемы — внешние
+    return True  # относительный путь — внутренний
 
 
 def _is_downloadable(tag: str, abs_url: str) -> bool:
