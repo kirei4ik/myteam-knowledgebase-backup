@@ -206,10 +206,17 @@ REDACT=true
 
 1. Создайте Application из Git-репозитория (Dockerfile). Контейнер по умолчанию «спит» (`sleep infinity`) — всю работу выполняет Scheduled Task.
 2. В Environment Variables укажите переменные из `.env.example`.
+
+   ### Volume — когда нужен
+
+   Volume `/data/backups` нужен **только** для `STORAGE_BACKEND=local` и для `s3`/`github` **не требуется**: сборка backup идёт во временный `WORK_DIR` (по умолчанию `/tmp`), а в S3/GitHub публикуется в том же прогоне — постоянное хранилище в контейнере не участвует.
+
 3. При `STORAGE_BACKEND=local` **обязательно** создайте persistent volume и смонтируйте его в `/data/backups`, а в env задайте `LOCAL_BACKUP_DIR=/data/backups`.
 
-   Без volume бэкапы писались бы в `./backups` относительно `WORKDIR /app` — то есть в эфемерную файловую систему контейнера `/app/backups`, которая исчезает при редеплое/рестарте. Volume в Coolify: Application → Storage → Add Volume, mount path `/data/backups`.
+   Без volume бэкапы писались бы в `./backups` относительно `WORKDIR /app` — то есть в локальный бэкап в эфемерной файловой системе контейнера `/app/backups`, которая исчезает при редеплое/рестарте. Volume в Coolify: Application → Storage → Add Volume, mount path `/data/backups`. Заодно это место будет доступно через S3/SFTP, если нужно выгрузить копию вручную.
 4. Создайте Scheduled Task с командой `python backup.py`. Логи прогона смотрите в Logs задачи (весь INFO/ERROR вывод).
+
+   Поле контейнера/службы Coolify заполняет автоматически (имя вида `{project}-{environment}-{app}`) — вводить вручную не нужно, задача выполняется в том же контейнере приложения.
 
 Рекомендуемое расписание: `30 2 * * *` (раз в сутки). Расписание задаётся в Coolify, не в коде.
 
