@@ -48,6 +48,21 @@ def test_s3_backend_selection(monkeypatch):
     assert isinstance(s, S3StorageBackend)
 
 
+def test_s3_client_checksum_config(monkeypatch):
+    import os
+    monkeypatch.setenv("STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("S3_ENDPOINT_URL", "https://s3.example.com")
+    monkeypatch.setenv("S3_BUCKET", "b")
+    monkeypatch.setenv("S3_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "a"))
+    monkeypatch.setenv("S3_SECRET_ACCESS_KEY", os.environ.get("AWS_SECRET_ACCESS_KEY", "s"))
+    monkeypatch.setenv("S3_REGION", "ru1")
+    backend = S3StorageBackend(
+        bucket="b", prefix="kb",
+        endpoint_url="https://s3.example.com",
+        access_key_id="a", secret_access_key="s", region="ru1")
+    assert backend._client.meta.config.request_checksum_calculation == "when_required"
+
+
 def test_config_missing_required_local(monkeypatch):
     monkeypatch.setenv("STORAGE_BACKEND", "local")
     monkeypatch.setenv("MYTEAM_EMAIL", "")

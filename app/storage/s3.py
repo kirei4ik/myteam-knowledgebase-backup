@@ -33,10 +33,15 @@ class S3StorageBackend(StorageBackend):
         if region:
             session_kwargs["region_name"] = region
         import boto3
+        from botocore.config import Config
+        # Некоторые S3-совместимые шлюзы (Caddy/Beget и др.) не принимают
+        # CRC32-trailer с aws-chunked, который boto3 добавляет по умолчанию при
+        # upload_file/put_object -> XAmzContentSHA256Mismatch. Отключаем авто-счётку.
         self._client = boto3.client(
             "s3",
             endpoint_url=endpoint_url or None,
             verify=verify_ssl,
+            config=Config(request_checksum_calculation="when_required"),
             **session_kwargs,
         )
 
