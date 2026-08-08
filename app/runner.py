@@ -29,6 +29,28 @@ def _now_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H%M%S")
 
 
+def _flatten_groups(groups: list[dict]) -> dict[int, list[str]]:
+    """Раскрывает дерево групп в карту {group_id: [компоненты пути]}.
+
+    Включает и корневые, и вложенные группы; путь строится от корня
+    (например, ['Общая информация компании', 'Юридические лица и реквизиты']).
+    """
+    result: dict[int, list[str]] = {}
+
+    def walk(group: dict, ancestors: list[str]) -> None:
+        gid = group.get("id")
+        if gid is not None:
+            parts = ancestors + [sanitize_component(
+                group.get("name", f"category-{gid}"))]
+            result[int(gid)] = parts
+            for child in group.get("children") or []:
+                walk(child, parts)
+
+    for group in groups:
+        walk(group, [])
+    return result
+
+
 def build_backup(config: Config) -> Manifest:
     """Строит полный backup в WORK_DIR. Бросает BackupError при критичных ошибках."""
     started_at = datetime.now()
@@ -45,7 +67,8 @@ def build_backup(config: Config) -> Manifest:
 
     groups = client.get_groups()
     logger.info(f"Categories loaded: {len(groups)}")
-    group_names = {int(g["id"]): g.get("name", "") for g in groups if "id" in g}
+    group_paths = _flatten_groups(groups)
+    group_names = {gid: parts[-1] for gid, parts in group_paths.items()}
 
     kb_root = work_root / BACKUP_SUBDIR
     kb_root.mkdir(parents=True, exist_ok=True)
@@ -53,10 +76,8 @@ def build_backup(config: Config) -> Manifest:
     manifest = Manifest(source=config.myteam_base_url, categories=len(groups))
 
     category_dirs: dict[int, Path] = {}
-    for g in groups:
-        gid = g["id"]
-        dir_name = sanitize_component(g.get("name", f"category-{gid}"))
-        gdir = kb_root / dir_name
+    for gid, parts in group_paths.items():
+        gdir = kb_root.joinpath(*parts)
         gdir.mkdir(parents=True, exist_ok=True)
         category_dirs[gid] = gdir
 

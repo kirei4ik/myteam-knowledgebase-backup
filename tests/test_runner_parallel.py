@@ -106,3 +106,51 @@ def test_fatal_asset_error_raises_backup_error(monkeypatch, tmp_path):
     _patch(monkeypatch, FatalExporter)
     with pytest.raises(BackupError):
         build_backup(_config(tmp_path, concurrency=2))
+
+
+class NestedGroupsClient(FakeClient):
+    def get_groups(self):
+        return [{
+            "id": 1,
+            "name": "Общая информация компании",
+            "children": [
+                {"id": 3, "name": "Юридические лица и реквизиты",
+                 "children": [{"id": 11, "name": "Карточка организации - АЭК"}]},
+            ],
+        }]
+
+    def get_group_articles(self, gid):
+        return [{"id": 1, "name": "A1", "group": {"id": 11}}]
+
+    def get_article(self, aid):
+        return {"id": aid, "name": f"A{aid}", "content": "",
+                "group": {"id": 11}, "files": []}
+
+    def clone(self):
+        return NestedGroupsClient(self.config)
+
+
+class NestedExporter:
+    def __init__(self, client):
+        self.client = client
+
+    def export_article(self, art_dir, item, category_name):
+        art_dir.mkdir(parents=True, exist_ok=True)
+        (art_dir / f"a{item['id']}.md").write_text(str(item["id"]))
+        return {"images": 0, "attachments": 0, "files": {}, "errors": []}
+
+
+@pytest.mark.parametrize("concurrency", [1, 4])
+def test_build_backup_nested_group_hierarchy(monkeypatch, tmp_path, concurrency):
+    from app import runner as runner_mod
+    monkeypatch.setattr(runner_mod, "MyTeamClient", NestedGroupsClient)
+    monkeypatch.setattr(
+        runner_mod, "Exporter",
+        lambda c, b, f, redact=True: NestedExporter(c))
+    build_backup(_config(tmp_path, concurrency=concurrency))
+
+    nested = (tmp_path / "work" / "knowledge-base"
+              / "Общая информация компании"
+              / "Юридические лица и реквизиты"
+              / "Карточка организации - АЭК" / "A1")
+    assert (nested / "a1.md").is_file()
