@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from app.exporter import normalize_date
-from app.html_converter import build_markdown, is_internal_url
+from app.html_converter import (
+    LOCAL_FILE_PLACEHOLDER,
+    build_markdown,
+    is_internal_url,
+)
 
 BASE = "https://x.ru"
 
@@ -22,11 +26,25 @@ def test_is_internal_url():
     assert not is_internal_url("ftp://x.ru/a.png", BASE)
 
 
-def test_file_scheme_image_skipped():
+def test_file_scheme_image_replaced_with_placeholder():
     r = build_markdown(
         '<p><img src="file:///Users/me/tmp/lu123_tmp.png"></p>', BASE)
     assert r.resources == []
-    assert "lu123_tmp.png" in r.markdown or "tmp.png" in r.markdown
+    assert r.skipped == 1
+    assert LOCAL_FILE_PLACEHOLDER in r.markdown
+    assert "file://" not in r.markdown
+
+
+def test_ftp_scheme_image_replaced():
+    r = build_markdown('<p><img src="ftp://evil/a.png"></p>', BASE)
+    assert r.skipped == 1
+    assert LOCAL_FILE_PLACEHOLDER in r.markdown
+
+
+def test_link_local_scheme_not_replaced():
+    r = build_markdown('<p><a href="file:///Users/me/x.pdf">x</a></p>', BASE)
+    assert r.skipped == 0
+    assert LOCAL_FILE_PLACEHOLDER not in r.markdown
 
 
 def test_html_to_markdown_heading_paragraph():

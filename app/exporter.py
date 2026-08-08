@@ -112,6 +112,10 @@ class Exporter:
         result = build_markdown(content_html, self.base_url)
         markdown = result.markdown
 
+        if result.skipped:
+            logger.warn(f"Article {item.get('id')}: {result.skipped} "
+                        f"local resource(s) skipped ({self.base_url})")
+
         # 2. скачиваем встроенные картинки/видео
         downloader = Downloader(
             self.client, article_dir, self.fail_on_asset_error, self.progress)
@@ -174,4 +178,5 @@ class Exporter:
             "attachments": len(attachment_shas) + inline_attachments,
             "files": {**embedded_shas, **attachment_shas},
             "errors": downloader.errors,
+            "skipped": result.skipped,
         }

@@ -167,6 +167,9 @@ def _collect(manifest, result, label) -> None:
     for rel, digest in stat["files"].items():
         manifest.files[f"{result['aid']}/{rel}"] = digest
     manifest.errors.extend(f"[{result['title']}] {e}" for e in stat["errors"])
+    if stat.get("skipped"):
+        manifest.warnings.append(
+            f"Article {result['aid']}: {stat['skipped']} local resource(s) skipped")
 
 
 def main(argv: list[str] | None = None) -> int:

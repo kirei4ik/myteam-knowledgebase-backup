@@ -22,6 +22,11 @@ class EmbeddedResource:
 class ConvertResult:
     markdown: str
     resources: list[EmbeddedResource] = field(default_factory=list)
+    skipped: int = 0  # количество пропущенных локальных ресурсов (file:// и т.п.)
+
+
+LOCAL_FILE_PLACEHOLDER = ("[❗ Изображение недоступно: локальный файл у автора, "
+                          "на сервере отсутствует]")
 
 
 def is_internal_url(url: str, base_url: str) -> bool:
@@ -33,6 +38,11 @@ def is_internal_url(url: str, base_url: str) -> bool:
     if "://" in url:
         return False  # file://, ftp:// и прочие схемы — внешние
     return True  # относительный путь — внутренний
+
+
+def _is_local_scheme(url: str) -> bool:
+    """True, если URL использует не http(s) схему (file://, ftp:// и т.п.)."""
+    return "://" in url and not url.startswith(("http://", "https://"))
 
 
 def _is_downloadable(tag: str, abs_url: str) -> bool:
@@ -79,11 +89,19 @@ def build_markdown(content_html: str, base_url: str) -> ConvertResult:
     soup = BeautifulSoup(content_html or "", "html.parser")
     resources: list[EmbeddedResource] = []
     used_names: set[str] = set()
+    skipped = 0
 
     for node in soup.find_all(["img", "video", "source", "a"]):
         attr = "src" if node.name != "a" else "href"
         raw = (node.get(attr) or node.get("data-src") or "").strip()
         if not raw or raw.startswith("data:"):
+            continue
+        # локальные файловые схемы (file:// и т.п.) — не скачиваются вовсе,
+        # заменяются маркером и попадают в перечень пропущенных.
+        if _is_local_scheme(raw):
+            if node.name != "a":
+                node.replace_with(LOCAL_FILE_PLACEHOLDER)
+                skipped += 1
             continue
         if not is_internal_url(raw, base_url):
             continue
@@ -103,7 +121,8 @@ def build_markdown(content_html: str, base_url: str) -> ConvertResult:
         ))
 
     md = _markdownify(str(soup), heading_style="ATX", bullets="*")
-    return ConvertResult(markdown=md.strip() + "\n", resources=resources)
+    return ConvertResult(markdown=md.strip() + "\n", resources=resources,
+                         skipped=skipped)
 
 
 def to_plain_markdown(content_html: str) -> str:

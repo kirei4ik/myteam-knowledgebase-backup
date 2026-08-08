@@ -34,3 +34,12 @@ def test_report_with_errors(tmp_path: Path) -> None:
     assert "Статус: Ошибки (2)" in text
     assert "- group 5: boom" in text
     assert "- [Статья] fetch failed" in text
+
+
+def test_report_with_warnings(tmp_path: Path) -> None:
+    m = Manifest(source="https://kb.example", categories=1, articles=2)
+    m.warnings.append("Article 24: 12 local resource(s) skipped")
+    text = _report(tmp_path, m)
+    assert "Статус: OK" in text  # warnings не влияют на статус
+    assert "## Предупреждения (1)" in text
+    assert "- Article 24: 12 local resource(s) skipped" in text

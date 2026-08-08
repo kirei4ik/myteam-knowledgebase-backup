@@ -16,6 +16,7 @@ class Manifest:
     attachments: int = 0
     errors: list[str] = field(default_factory=list)
     files: dict[str, str] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -28,6 +29,7 @@ class Manifest:
             "attachments": self.attachments,
             "files": self.files,
             "errors": self.errors,
+            "warnings": self.warnings,
         }
 
     def write(self, backup_dir: Path) -> None:

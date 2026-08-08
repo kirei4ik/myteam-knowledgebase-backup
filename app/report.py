@@ -39,6 +39,13 @@ def build_report(backup_dir: Path, manifest: Manifest,
         for err in errors:
             lines.append(f"- {err}")
 
+    if manifest.warnings:
+        lines.append("")
+        lines.append(f"## Предупреждения ({len(manifest.warnings)})")
+        lines.append("")
+        for warn in manifest.warnings:
+            lines.append(f"- {warn}")
+
     lines.append("")
     (backup_dir / "report.md").write_text(
         "\n".join(lines), encoding="utf-8")
