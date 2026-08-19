@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.exporter import Exporter, front_matter
+from app.exporter import Exporter, article_url, front_matter
 
 
 def _item(**overrides):
@@ -20,12 +20,20 @@ def _item(**overrides):
 
 
 def test_front_matter_fields():
-    fm = front_matter(_item(), "Обходы блокировок")
+    fm = front_matter(_item(), "Обходы блокировок", "https://x.ru")
     assert "myteam_id: 8" in fm
+    assert 'myteam_url: "https://x.ru/knowledge-base/8"' in fm
     assert 'category: "Обходы блокировок"' in fm
     assert 'created: "2026-05-04 13:19"' in fm
     assert 'updated: "2026-07-20 11:59"' in fm
     assert "  - tag1" in fm
+
+
+def test_article_url_uses_api_link_when_present():
+    assert article_url(_item(link="/kb/custom/8"), "https://x.ru") == "https://x.ru/kb/custom/8"
+    assert article_url(_item(url="https://x.ru/kb/custom/8"), "https://other.ru") == (
+        "https://x.ru/kb/custom/8"
+    )
 
 
 def test_front_matter_no_tags():

@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urljoin, urlparse
 
 from .common import sanitize_component
 from .downloader import Downloader
@@ -47,9 +48,31 @@ def _tags(item: dict) -> list[str]:
     return [str(t) for t in (item.get("tags") or [])]
 
 
-def front_matter(item: dict, category_name: str) -> str:
+def article_url(item: dict, base_url: str) -> str:
+    """Публичная ссылка на статью в веб-интерфейсе «МояКоманда»."""
+    for key in ("url", "link"):
+        value = str(item.get(key) or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+        if value.startswith("/"):
+            return urljoin(base_url.rstrip("/") + "/", value.lstrip("/"))
+
+    article_id = item.get("id")
+    if article_id in (None, ""):
+        return ""
+    path = f"/knowledge-base/{article_id}"
+    parsed = urlparse(base_url)
+    if not parsed.scheme or not parsed.netloc:
+        return path
+    return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+
+
+def front_matter(item: dict, category_name: str, base_url: str = "") -> str:
     lines = ["---"]
     lines.append(f"myteam_id: {item.get('id')}")
+    source_url = article_url(item, base_url)
+    if source_url:
+        lines.append(f'myteam_url: "{source_url.replace(chr(34), chr(39))}"')
     title = str(item.get("name", ""))
     lines.append(f'title: "{title.replace(chr(34), chr(39))}"')
     lines.append(f"category_id: {(item.get('group') or {}).get('id', '')}")
@@ -143,7 +166,7 @@ class Exporter:
                 attachment_shas[safe_name] = digest
 
         # 4. Markdown: front matter + вложения
-        md_parts = [front_matter(item, category_name), "", markdown]
+        md_parts = [front_matter(item, category_name, self.base_url), "", markdown]
         if attachments:
             md_parts.append("")
             md_parts.append("## Вложения")
