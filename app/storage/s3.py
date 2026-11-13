@@ -120,7 +120,7 @@ class S3StorageBackend(StorageBackend):
 
     def _list_snapshots(self) -> list[tuple[datetime, str]]:
         """Возвращает [(ts, prefix)] для снапшотов, отсортированные DESC."""
-        prefix = f"{self.prefix}/snapshots/"
+        prefix = self._key("snapshots") + "/"
         try:
             resp = self._client.list_objects_v2(Bucket=self.bucket, Prefix=prefix,
                                                 Delimiter="/")
