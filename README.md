@@ -107,7 +107,7 @@ docker run --rm \
 
 Контейнер по умолчанию «спит» (`sleep infinity`); бэкап запускается явным вызовом `python backup.py` (аргументы переопределяют CMD).
 
-В `docker-compose`/Coolify обязательно подключается persistent volume `/data/backups`.
+В `docker-compose`/Coolify persistent volume `/data/backups` требуется только при `STORAGE_BACKEND=local`; для S3 и GitHub не нужен.
 
 ## GitHub backend
 
@@ -125,29 +125,79 @@ Backend выполняет `git clone` → замену содержимого `
 
 ## S3 backend
 
+S3 — объектное хранилище. Сервис выгружает в него актуальную копию (`latest/`) и архивы предыдущих копий (`snapshots/`). Подойдут AWS S3 и совместимые сервисы, например MinIO или S3-хранилище другого провайдера.
+
+### Пример заполнения переменных
+
 ```env
 STORAGE_BACKEND=s3
-S3_ENDPOINT_URL=
-S3_ACCESS_KEY_ID=
-S3_SECRET_ACCESS_KEY=
-S3_BUCKET=
-S3_REGION=
+S3_ENDPOINT_URL=https://s3.example-provider.ru
+S3_ACCESS_KEY_ID=EXAMPLEACCESSKEY
+S3_SECRET_ACCESS_KEY=replace-with-your-secret-key
+S3_BUCKET=myteam-knowledgebase-backup
+S3_REGION=ru-1
 S3_PREFIX=myteam-kb
 S3_VERIFY_SSL=true
 ```
 
-Поддерживается любой S3-compatible storage (AWS, MinIO, DO Spaces и т.п.). Если бакет целиком предназначен для этой копии базы знаний, задайте `S3_PREFIX=` (пустое значение): `latest/` и `snapshots/` будут созданы непосредственно в корне бакета, без дополнительного каталога. При непустом `S3_PREFIX` структура остаётся прежней.
+**Это пример, а не готовые реквизиты:** `s3.example-provider.ru`, `ru-1` и ключи здесь вымышленные. Реальные значения возьмите в панели своего S3-провайдера.
 
-В примере с `S3_PREFIX=myteam-kb` в bucket создаётся:
+| Переменная | Что указывать |
+| --- | --- |
+| `STORAGE_BACKEND` | `s3` для выгрузки в объектное хранилище; также поддерживаются `local` и `github` |
+| `S3_ENDPOINT_URL` | **Адрес S3 API**, например `https://s3.example-provider.ru`. Найдите поле «Endpoint», «S3 API URL» или «Адрес подключения» в панели провайдера. Укажите `https://`, при необходимости порт (`https://host:9000`), **без имени бакета, пути к папке и ссылки на веб-консоль**. Для обычного AWS S3 можно оставить пустым: boto3 выберет стандартный endpoint |
+| `S3_ACCESS_KEY_ID` | Access Key ID от S3-провайдера: идентификатор ключа доступа, **не** логин от панели |
+| `S3_SECRET_ACCESS_KEY` | Secret Access Key, выдаваемый вместе с Access Key ID. Не публикуйте в Git и логах |
+| `S3_BUCKET` | **Точное имя уже созданного бакета**, например `myteam-knowledgebase-backup`. Здесь не нужен URL или путь |
+| `S3_REGION` | Регион из настроек провайдера, например условный `ru-1`. Для AWS укажите действительный регион бакета (например `eu-central-1`); у некоторых совместимых провайдеров регион можно не указывать |
+| `S3_PREFIX` | Папка *внутри* бакета. По умолчанию `myteam-kb`; если хотите писать прямо в корень бакета, явно установите `S3_PREFIX=` |
+| `S3_VERIFY_SSL` | `true` (по умолчанию): проверять TLS-сертификат. `false` снижает безопасность, для обычного подключения не используйте |
+
+**Как найти endpoint:** откройте настройки бакета или раздел S3 API/подключения у провайдера. Нужен серверный адрес для S3-клиентов, а не URL браузера с файловым менеджером. Если провайдер показывает отдельные URL для API, публичной раздачи и панели управления, выбирайте **API endpoint**.
+
+### Куда будут складываться файлы
+
+**По умолчанию**, если `S3_PREFIX` не задан, используется `myteam-kb`. Это сохраняет прежнее поведение:
 
 ```text
-myteam-kb/
+myteam-knowledgebase-backup/       # S3_BUCKET
+└── myteam-kb/                     # S3_PREFIX (по умолчанию)
+    ├── latest/
+    │   ├── knowledge-base/
+    │   ├── manifest.json
+    │   └── report.md
+    └── snapshots/
+        └── <timestamp>/
+            └── knowledge-base.zip
+```
+
+Если бакет создан специально под этот бэкап, дополнительная папка не обязательна. Явно задайте **пустое значение**, не `/` и не имя бакета:
+
+```env
+S3_BUCKET=myteam-knowledgebase-backup
+S3_PREFIX=
+```
+
+Тогда файлы будут лежать в корне бакета:
+
+```text
+myteam-knowledgebase-backup/
 ├── latest/
-│   └── knowledge-base/
+│   ├── knowledge-base/
+│   ├── manifest.json
+│   └── report.md
 └── snapshots/
     └── <timestamp>/
         └── knowledge-base.zip
 ```
+
+**Важно:** отсутствие переменной `S3_PREFIX` и явно заданное `S3_PREFIX=` — разные случаи. При отсутствии применяется значение по умолчанию `myteam-kb`; при пустом значении дополнительный уровень не создаётся. В Coolify создайте переменную `S3_PREFIX` с пустым значением, а не удаляйте её.
+
+Бакет необходимо создать заранее; учётные данные должны иметь права на запись, чтение списка объектов и удаление старых снапшотов в указанном пути. Перед использованием retention проверьте, что бакет или префикс не используется для чужих файлов с совпадающими путями `snapshots/`.
+
+### Другие поддерживаемые способы хранения
+
+S3 не обязателен. `STORAGE_BACKEND=local` сохраняет резервную копию на диск (для Docker/Coolify нужен persistent volume), а `STORAGE_BACKEND=github` публикует Markdown и вложения в Git-репозиторий. Примеры находятся в разделах «Quick Start» и «GitHub backend» выше.
 
 ## Snapshots и retention
 
