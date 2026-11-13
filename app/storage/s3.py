@@ -45,22 +45,26 @@ class S3StorageBackend(StorageBackend):
             **session_kwargs,
         )
 
+    def _key(self, *parts: str) -> str:
+        """S3 key relative to the bucket, with an optional prefix."""
+        return "/".join(part for part in (self.prefix, *parts) if part)
+
     def store(self, backup_root: Path, timestamp: str, manifest) -> None:
         kb = backup_root / "knowledge-base"
         # загружаем latest
         logger.info("Uploading to s3")
         for p in kb.rglob("*"):
             if p.is_file():
-                key = f"{self.prefix}/latest/knowledge-base/{_rel(p, kb)}"
+                key = self._key("latest", "knowledge-base", _rel(p, kb))
                 self._client.upload_file(str(p), self.bucket, key)
-        mf_key = f"{self.prefix}/latest/manifest.json"
+        mf_key = self._key("latest", "manifest.json")
         self._client.upload_file(str(backup_root / "manifest.json"), self.bucket, mf_key)
-        rp_key = f"{self.prefix}/latest/report.md"
+        rp_key = self._key("latest", "report.md")
         self._client.upload_file(str(backup_root / "report.md"), self.bucket, rp_key)
         logger.info("latest uploaded")
 
         if self.snapshot:
-            snap_key = f"{self.prefix}/snapshots/{timestamp}/knowledge-base.zip"
+            snap_key = self._key("snapshots", timestamp, "knowledge-base.zip")
             if self._should_interval_skip(snap_key):
                 logger.info(f"Skipping snapshot (min interval "
                             f"{self.min_interval_minutes:g}m)")
@@ -78,7 +82,7 @@ class S3StorageBackend(StorageBackend):
         try:
             resp = self._client.list_objects_v2(
                 Bucket=self.bucket,
-                Prefix=f"{self.prefix}/snapshots/",
+                Prefix=self._key("snapshots") + "/",
                 Delimiter="/")
         except Exception as exc:  # noqa: BLE001
             logger.warn(f"S3 interval check failed: {exc}")
