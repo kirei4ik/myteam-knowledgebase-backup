@@ -136,7 +136,9 @@ S3_PREFIX=myteam-kb
 S3_VERIFY_SSL=true
 ```
 
-Поддерживается любой S3-compatible storage (AWS, MinIO, DO Spaces и т.п.). В bucket создаётся:
+Поддерживается любой S3-compatible storage (AWS, MinIO, DO Spaces и т.п.). Если бакет целиком предназначен для этой копии базы знаний, задайте `S3_PREFIX=` (пустое значение): `latest/` и `snapshots/` будут созданы непосредственно в корне бакета, без дополнительного каталога. При непустом `S3_PREFIX` структура остаётся прежней.
+
+В примере с `S3_PREFIX=myteam-kb` в bucket создаётся:
 
 ```text
 myteam-kb/
