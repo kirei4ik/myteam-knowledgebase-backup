@@ -144,7 +144,7 @@ def build_config(dry_run: bool = False, output_dir: str | None = None) -> Config
         s3_secret_access_key=_env("S3_SECRET_ACCESS_KEY"),
         s3_bucket=_env("S3_BUCKET"),
         s3_region=_env("S3_REGION"),
-        s3_prefix=_env("S3_PREFIX", "myteam-kb"),
+        s3_prefix=os.environ.get("S3_PREFIX", "myteam-kb"),
         s3_verify_ssl=_as_bool(_env("S3_VERIFY_SSL", "true"), True),
     )
 
