@@ -130,3 +130,16 @@ def test_retry_config_parsed(monkeypatch):
     cfg = _cfg(monkeypatch, RETRY_COUNT="5", RETRY_BACKOFF="1.5")
     assert cfg.retry_count == 5
     assert cfg.retry_backoff == 1.5
+
+def test_s3_empty_prefix_is_preserved(monkeypatch):
+    cfg = _cfg(monkeypatch, STORAGE_BACKEND="s3",
+               S3_BUCKET="b", S3_ACCESS_KEY_ID="a", S3_SECRET_ACCESS_KEY="s",
+               S3_PREFIX="")
+    assert cfg.s3_prefix == ""
+
+
+def test_s3_missing_prefix_uses_old_default(monkeypatch):
+    monkeypatch.delenv("S3_PREFIX", raising=False)
+    cfg = _cfg(monkeypatch, STORAGE_BACKEND="s3",
+               S3_BUCKET="b", S3_ACCESS_KEY_ID="a", S3_SECRET_ACCESS_KEY="s")
+    assert cfg.s3_prefix == "myteam-kb"
